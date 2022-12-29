@@ -130,3 +130,5 @@ dmypy.json
 
 # Weights and Biases
 wandb/
+
+data/
