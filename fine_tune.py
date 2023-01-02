@@ -27,7 +27,7 @@ if gpus:
 def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
 
-exp_id = id_generator(size=8)
+exp_id = id_generator(size=8) # TODO: lowercase
 print('Experiment Id: ', exp_id)
 
 
