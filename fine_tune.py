@@ -89,7 +89,10 @@ tf_test_set = model.prepare_tf_dataset(
 # )
 
 # Compile the model
-optimizer = AdamWeightDecay(learning_rate=2e-5, weight_decay_rate=0.01)
+# optimizer = AdamWeightDecay(learning_rate=2e-5, weight_decay_rate=0.01)
+optimizer = tf.keras.optimizers.experimental.AdamW(
+    learning_rate=2e-5, weight_decay=0.01
+)
 model.compile(optimizer=optimizer)
 
 # Initialize a W&B run
