@@ -132,3 +132,4 @@ dmypy.json
 wandb/
 
 data/
+models/

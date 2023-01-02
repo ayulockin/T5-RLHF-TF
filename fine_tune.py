@@ -1,3 +1,5 @@
+import string
+import random
 import wandb
 from wandb.keras import WandbMetricsLogger
 
@@ -8,10 +10,6 @@ from datasets import load_metric
 from transformers import AutoTokenizer
 from transformers import DataCollatorForSeq2Seq
 from transformers import TFAutoModelForSeq2SeqLM
-from transformers import create_optimizer, AdamWeightDecay
-
-use_wandb = False
-batch_size = 8
 
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
@@ -26,80 +24,84 @@ if gpus:
     print(e)
 
 
+def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
+    return ''.join(random.choice(chars) for _ in range(size))
+
+exp_id = id_generator(size=8)
+print('Experiment Id: ', exp_id)
+
+
+USE_WANDB = False
+BATCH_SIZE = 8
 PREFIX = "summarize: "
+DATA_PATH = "../dataset_splits"
+LEARNING_RATE = 2e-5
+WEIGHT_DECAY = 0.01
+EPOCHS = 1
 
-# Get the dataset and split it
-dataset = load_dataset("csv", data_files="data/arxiv_data_new.csv")
-dataset = dataset["train"]
-dataset = dataset.train_test_split(test_size=0.2)
 
-# Get the tokenizer
-tokenizer = AutoTokenizer.from_pretrained("t5-small", model_max_length=1024)
+# Get the dataset
+train_dataset = load_dataset("json", data_files=f"{DATA_PATH}/train_0_1.jsonl")["train"]
+valid_dataset = load_dataset("json", data_files=f"{DATA_PATH}/valid_0_1.jsonl")["train"]
+
+# Remove unwanted columns
+train_dataset = train_dataset.remove_columns(['id', 'subreddit', 'title'])
+valid_dataset = valid_dataset.remove_columns(['id', 'subreddit', 'title'])
 
 # Get the model
+tf.keras.backend.clear_session()
 model = TFAutoModelForSeq2SeqLM.from_pretrained("t5-small")
 model.summary()
 
-# Build dataloaders
-# Preprocessing function to append the PREFIX to prompt the model for summarization task.
-def preprocess_function(examples):
-    inputs = [PREFIX + doc for doc in examples["abstracts"]]
-    model_inputs = tokenizer(inputs, max_length=1024, truncation=True)
+# Tokenizer
+tokenizer = AutoTokenizer.from_pretrained("t5-small")
 
-    labels = tokenizer(text_target=examples["titles"], max_length=32, truncation=True)
+
+# Preprocess the text
+def preprocess_function(examples):
+    inputs = [PREFIX + doc for doc in examples["post"]]
+    model_inputs = tokenizer(inputs, max_length=512, truncation=True)
+
+    # Setup the tokenizer for targets
+    with tokenizer.as_target_tokenizer():
+        labels = tokenizer(text_target=examples["summary"], max_length=48, truncation=True)
 
     model_inputs["labels"] = labels["input_ids"]
     return model_inputs
 
-tokenized_dataset = dataset.map(preprocess_function, batched=True)
-tokenized_dataset = tokenized_dataset.remove_columns(['titles', 'abstracts'])
+train_dataset = train_dataset.map(preprocess_function, batched=True)
+valid_dataset = valid_dataset.map(preprocess_function, batched=True)
 
+# Prepare dataloader
 data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model, return_tensors="tf")
-
 tf_train_set = model.prepare_tf_dataset(
-    tokenized_dataset["train"],
+    train_dataset,
     shuffle=True,
-    batch_size=batch_size,
+    batch_size=BATCH_SIZE,
     collate_fn=data_collator,
 )
 
-tf_test_set = model.prepare_tf_dataset(
-    tokenized_dataset["test"],
+tf_valid_set = model.prepare_tf_dataset(
+    valid_dataset,
     shuffle=False,
-    batch_size=batch_size,
+    batch_size=BATCH_SIZE,
     collate_fn=data_collator,
 )
 
-# tf_train_set = tokenized_dataset["train"].to_tf_dataset(
-#     columns=["input_ids", "attention_mask"],
-#     label_cols=["labels"],
-#     collate_fn=data_collator,
-#     batch_size=32,
-#     shuffle=True,
-#     prefetch=True,
-# )
-
-# tf_test_set = tokenized_dataset["test"].to_tf_dataset(
-#     columns=["input_ids", "attention_mask"],
-#     label_cols=["labels"],
-#     collate_fn=data_collator,
-#     batch_size=32,
-#     shuffle=False,
-#     prefetch=True,
-# )
-
-# Compile the model
-# optimizer = AdamWeightDecay(learning_rate=2e-5, weight_decay_rate=0.01)
+# Optimizer and compile
 optimizer = tf.keras.optimizers.experimental.AdamW(
-    learning_rate=2e-5, weight_decay=0.01
+    learning_rate=LEARNING_RATE, weight_decay=WEIGHT_DECAY
 )
 model.compile(optimizer=optimizer)
 
-# Initialize a W&B run
+# Callbacks
 callbacks = []
-if use_wandb:
+
+# Initialize a W&B run
+if USE_WANDB:
     run = wandb.init(
         project="rlhf-tf",
+        job_type="fine_tune"
     )
 
     callbacks += [WandbMetricsLogger()]
@@ -107,7 +109,10 @@ if use_wandb:
 # Train the model
 model.fit(
     x=tf_train_set,
-    validation_data=tf_test_set,
-    epochs=3,
-    callbacks=callbacks
+    validation_data=tf_valid_set,
+    epochs=EPOCHS,
+    callbacks=[]
 )
+
+# Save the model for inference
+model.save_pretrained(f"models/model_{exp_id}", save_model=True)
