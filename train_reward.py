@@ -40,13 +40,13 @@ exp_id = id_generator(size=8) # TODO: lowercase
 print('Experiment Id: ', exp_id)
 
 
-USE_WANDB = False
+USE_WANDB = True
 BATCH_SIZE = 32
 PREFIX = "binary classification: "
 DATA_PATH = "../comparison_splits"
-LEARNING_RATE = 2e-5
+LEARNING_RATE = 2e-4
 WEIGHT_DECAY = 0.01
-EPOCHS = 3
+EPOCHS = 10
 AUTOTUNE = tf.data.AUTOTUNE
 
 
