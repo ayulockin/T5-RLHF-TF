@@ -51,8 +51,8 @@ AUTOTUNE = tf.data.AUTOTUNE
 
 
 # Get the dataset
-train_dataset = load_dataset("json", data_files=f"{DATA_PATH}/train.jsonl")["train"]
-valid_dataset = load_dataset("json", data_files=f"{DATA_PATH}/valid.jsonl")["train"]
+train_dataset = load_dataset("json", data_files=f"{DATA_PATH}/train_v1.jsonl")["train"]
+valid_dataset = load_dataset("json", data_files=f"{DATA_PATH}/valid_v1.jsonl")["train"]
 
 # Tokenizer
 tokenizer = AutoTokenizer.from_pretrained("t5-small")
@@ -60,7 +60,7 @@ tokenizer = AutoTokenizer.from_pretrained("t5-small")
 # Preprocess raw text
 def preprocess_function(examples):
     inputs = [post + "\n" + summary for post, summary in zip(examples["post"], examples["summary"])]
-    inputs = [PREFIX + doc for doc in examples["post"]]
+    inputs = [PREFIX + doc for doc in inputs]
     model_inputs = tokenizer(inputs, max_length=550, truncation=True)
 
     # Setup the tokenizer for targets
