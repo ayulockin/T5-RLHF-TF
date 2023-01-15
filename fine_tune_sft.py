@@ -111,7 +111,7 @@ model.fit(
     x=tf_train_set,
     validation_data=tf_valid_set,
     epochs=EPOCHS,
-    callbacks=[]
+    callbacks=callbacks
 )
 
 # Save the model for inference
